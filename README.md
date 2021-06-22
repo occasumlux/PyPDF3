@@ -2,6 +2,13 @@
 
 [![GuardRails badge](https://badges.production.guardrails.io/sfneal/PyPDF3.svg)](https://www.guardrails.io)
 
+---
+## About this branch
+Experimental text extracting feature added, getting closer to natural reading order, but depends on numpy for matrix multiplications.
+
+---
+
+
 Fork of PyPDF2 with feature improvements.
 
 PyPDF3 is a pure-python PDF library capable of

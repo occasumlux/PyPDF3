@@ -47,6 +47,8 @@ import math
 import struct
 import sys
 import uuid
+import numpy as np
+from collections import OrderedDict
 from sys import version_info
 
 if version_info < (3, 0):
@@ -2771,6 +2773,131 @@ class PageObject(DictionaryObject):
                         text += i
                 text += "\n"
         return text
+
+    def extractText2(self):
+        """
+        Locate all text drawing commands, in the order they are provided in the
+        content stream, and extract the text.  This works well for some PDF
+        files, but poorly for others, depending on the generator used.  This will
+        be refined in the future.  Do not rely on the order of text coming out of
+        this function, as it will change if this function is made more
+        sophisticated.
+
+        :return: a Python 3 string object.
+        """
+        #text = u_("")
+        content = self["/Contents"].getObject()
+        if not isinstance(content, ContentStream):
+            content = ContentStream(content, self.pdf)
+        
+        text_dict = OrderedDict() # Is it really needed?
+        #in_text = False
+        tlm = np.identity(3) # Just to remember it exists
+        current_encoding = ""
+        text_leading = 0
+
+        known_encodings = {"/WinAnsiEncoding" : "windows-1252", "/MacRomanEncoding": "mac-roman"}
+
+        # Note: we check all strings are TextStringObjects.  ByteStringObjects
+        # are strings where the byte->string encoding was unknown, so adding
+        # them to the text here would be gibberish.
+        for operands, operator in content.operations:
+            if operator == b_("BT"):
+                tlm = np.identity(3)
+            
+            elif operator == b_("Tf"):
+                font_key, size = operands
+                font_dict = self["/Resources"]["/Font"][font_key]
+                font_encoding = font_dict.get("/Encoding", "")
+                current_encoding = font_encoding
+            
+            #
+            #  Text-positioning operators
+            #
+            elif operator == b_("TL"):
+                text_leading = operands[0]
+            
+            elif operator == b_("Td"):
+                tx, ty = (float(op) for op in operands)
+                tlm = tlm @ np.array([[1,0,0], [0,1,0], [tx,ty,1]])
+            
+            elif operator == b_("TD"):
+                # Same as Td, but also sets leading
+                tx, ty = (float(op) for op in operands)
+                text_leading = -ty
+                tlm = tlm @ np.array([[1,0,0], [0,1,0], [tx,ty,1]])
+
+            elif operator == b_("Tm"):
+                a,b,c,d,e,f = (float(op) for op in operands)
+                tlm = np.array([[a,b,0], [c,d,0], [e,f,1]])
+            
+            elif operator == b_("T*"):
+                # Same effect as 0 Tl Td
+                tx, ty = 0, text_leading
+                tlm = tlm @ np.array([[1,0,0], [0,1,0], [tx,ty,1]])
+
+            #
+            #   Text-showing operators
+            #
+            elif operator == b"Tj":
+                _text = operands[0]
+                y_pos = int(tlm[2,1])
+                if current_encoding in known_encodings:
+                    original_bytes = operands[0].original_bytes
+                    _text = original_bytes.decode(known_encodings[current_encoding])
+                if isinstance(_text, TextStringObject) or current_encoding in known_encodings:
+                    text_dict.setdefault(y_pos, "")
+                    text_dict[y_pos] += f"{_text} "
+
+            elif operator == b_("'"):
+                # Same as T* then string Tj
+                tx, ty = 0, text_leading
+                tlm = tlm @ np.array([[1,0,0], [0,1,0], [tx,ty,1]])
+
+                _text = operands[0]
+                y_pos = int(tlm[2,1])
+                if current_encoding in known_encodings:
+                    original_bytes = operands[0].original_bytes
+                    _text = original_bytes.decode(known_encodings[current_encoding])
+                if isinstance(_text, TextStringObject) or current_encoding in known_encodings:
+                    text_dict.setdefault(y_pos, "")
+                    text_dict[y_pos] += f"{_text} "
+
+            elif operator == b_('"'):
+                # Same as aw Tw then ac Tc then string '
+                _, _, _text = operands
+
+                tx, ty = 0, text_leading
+                tlm = tlm @ np.array([[1,0,0], [0,1,0], [tx,ty,1]])
+
+                y_pos = int(tlm[2,1])
+                if current_encoding in known_encodings:
+                    original_bytes = operands[0].original_bytes
+                    _text = original_bytes.decode(known_encodings[current_encoding])
+                if isinstance(_text, TextStringObject) or current_encoding in known_encodings:
+                    text_dict.setdefault(y_pos, "")
+                    text_dict[y_pos] += f"{_text} "
+
+            elif operator == b_("TJ"):
+                # Completely omitting the fact that each (set of) glyph(s) can be moved around
+                y_pos = int(tlm[2,1])
+                for i in operands[0]:
+                    if not isinstance(i, FloatObject) and not isinstance(i, NumberObject):
+                        _text = i
+                        if current_encoding in known_encodings:
+                            original_bytes = _text.original_bytes
+                            _text = original_bytes.decode(known_encodings[current_encoding])
+                        if isinstance(_text, TextStringObject) or current_encoding in known_encodings:
+                            text_dict.setdefault(y_pos, "")
+                            text_dict[y_pos] += f"{_text} "
+ 
+        if text_dict:
+            _, texts = zip(*sorted(text_dict.items(), key=lambda t: -t[0]))
+        else:
+            # No text found, so the unpacking would fail
+            texts = []
+        # Each line gets a linefeed
+        return "\n".join(texts) + "\n"
 
     mediaBox = createRectangleAccessor("/MediaBox", ())
     """
