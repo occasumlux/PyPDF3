@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyPDF3"
+authors = [
+    {name = "Stephen Neal", email = "stephen@stephenneal.net"},
+    {name = "Daryl Hernández", email = "daryl@ailextech.com"},
+]
+description = "Not so Pure Python PDF toolkit"
+readme = {file = "README.md", content-type = "text/markdown"}
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 2",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "tqdm",
+    "numpy",
+    'importlib-metadata; python_version<"3.8"',
+]
+
+[tool.setuptools]
+packages = ["PyPDF3"]
+
+[project.optional-dependencies]
+dev = [
+    # Linter
+    "pylint ~=2.17.0",
+    # Formatter
+    "black ~=23.1.0",
+    # Type checker
+    "mypy ~=1.1.1",
+]
+lsp = [
+    # Language server
+    "python-lsp-server ~=1.7.1",
+    # Formatter plugin
+    "python-lsp-black ~=1.2.1",
+    # Type checker plugin
+    "pylsp-mypy ~=0.6.6",
+    # Refactoring plugin
+    "pylsp-rope ~=0.1.11",
+]
+test = [
+    "pytest ~=7.2.2",
+    "pytest-cov ~=4.0.0",
+]
